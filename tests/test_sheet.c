@@ -1,0 +1,162 @@
+#include "sheet.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+static unsigned int tests;
+#define CHECK(x) do { ++tests; if(!(x)) { fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x);exit(1); } } while(0)
+static void expect(const char *formula,SheetNum result)
+{
+    CHECK(sheet_set(25,99,formula)==SHEET_OK);
+    if(sheet_error(25,99)) fprintf(stderr,"%s => %s\n",formula,sheet_error_text(sheet_error(25,99)));
+    CHECK(sheet_error(25,99)==SHEET_OK);
+    if(sheet_value(25,99)!=result) fprintf(stderr,"%s got %ld expected %ld\n",formula,(long)sheet_value(25,99),(long)result);
+    CHECK(sheet_value(25,99)==result);
+}
+static void error(const char *formula,unsigned char code)
+{
+    CHECK(sheet_set(25,99,formula)==SHEET_OK);
+    if(sheet_error(25,99)!=code) fprintf(stderr,"%s got %s expected %s\n",formula,sheet_error_text(sheet_error(25,99)),sheet_error_text(code));
+    CHECK(sheet_error(25,99)==code);
+}
+int main(void)
+{
+    unsigned char i,c,r;
+    const char *raw;
+    char out[20],clipboard[SHEET_TEXT_MAX+1];
+    sheet_reset();
+    CHECK(sheet_count()==0);
+    CHECK(sheet_set(0,0,"12.5")==SHEET_OK);
+    CHECK(sheet_set(0,1,"2.25")==SHEET_OK);
+    CHECK(sheet_set(0,2,"hello")==SHEET_OK);
+    CHECK(sheet_set(0,3,"'123")==SHEET_OK);
+    CHECK(sheet_kind(0,0)==SHEET_NUMBER);
+    CHECK(sheet_kind(0,2)==SHEET_TEXT);
+    CHECK(sheet_kind(0,3)==SHEET_TEXT);
+    CHECK(sheet_value(0,0)==1250);
+    expect("=A1+A2*2",1700);
+    expect("=(A1+A2)*2",2950);
+    expect("=1.23*2.34",288);
+    expect("=1.234",123);
+    expect("=1.235",124);
+    expect("=-1.235",-124);
+    expect("=0.005",1);
+    error("=21474836.475",SHEET_ERR_NUM);
+    expect("=1/8",13);
+    expect("=-1/8",-13);
+    expect("=21474836.47",2147483647L);
+    expect("=-21474836.47",-2147483647L);
+    expect("=21474836.47*1",2147483647L);
+    expect("=21474836.47/1",2147483647L);
+    expect("=21474836.47/21474836.47",100);
+    expect("=21474836.47*0",0);
+    expect("=SUM(A1:A4)",1475);
+    expect("=SUM(A2:A1,1,2)",1775);
+    expect("=SUM(A1+1,A2*2)",1800);
+    expect("=AVERAGE(A1:A4)",738);
+    expect("=MIN(A1:A4)",225);
+    expect("=MAX(A1:A4)",1250);
+    expect("=COUNT(A1:A4)",200);
+    expect("=COUNT(A1:A4,4,5)",400);
+    expect("=SUM(B1:B2)",0);
+    expect("=MIN(B1:B2)",0);
+    expect("=IF(A1>0,99,1/0)",9900);
+    expect("=IF(A1=0,1/0,88)",8800);
+    expect("=IF(FALSE,1/0,7)",700);
+    expect("=AND(A1>0,A2<3)",100);
+    expect("=AND(0,1)",0);
+    expect("=OR(0,1)",100);
+    expect("=NOT(TRUE)",0);
+    expect("=ABS(-1.99)",199);
+    expect("=ROUND(1.55,1)",160);
+    expect("=ROUND(-1.55,1)",-160);
+    expect("=ROUND(123.45,-1)",12000);
+    expect("=ROUND(1.22,2)",122);
+    expect("=INT(-1.25)",-200);
+    expect("=INT(1.99)",100);
+    expect("=MOD(-3,2)",100);
+    expect("=MOD(3,-2)",-100);
+    expect("=SQRT(4)",200);
+    expect("=SQRT(2)",141);
+    expect("=SQRT(0.01)",10);
+    expect("=SQRT(21474836.47)",463409);
+    expect("=POWER(2,10)",102400);
+    expect("=2^3^2",6400);
+    expect("=2^-2",25);
+    expect("=-2^2",400);
+    expect("=20%",20);
+    expect("=1<>2",100);
+    expect("=1<=1",100);
+    expect("=2>=3",0);
+    expect("=$A$1+A$2+$A1",2725);
+    error("=1/0",SHEET_ERR_DIV0);
+    error("=AVERAGE(B1:B2)",SHEET_ERR_DIV0);
+    error("=AA1",SHEET_ERR_REF);
+    error("=A0",SHEET_ERR_REF);
+    error("=A101",SHEET_ERR_REF);
+    error("=UNKNOWN(1)",SHEET_ERR_NAME);
+    error("=A3+1",SHEET_ERR_VALUE);
+    error("=21474836.47+0.01",SHEET_ERR_NUM);
+    error("=21474836.47*2",SHEET_ERR_NUM);
+    error("=-21474836.47-0.01",SHEET_ERR_NUM);
+    error("=INT(-21474836.47)",SHEET_ERR_NUM);
+    error("=SQRT(-1)",SHEET_ERR_NUM);
+    error("=(1+2",SHEET_ERR_PARSE);
+    CHECK(sheet_set(1,0,"=B2")==0);
+    CHECK(sheet_set(1,1,"=B1")==0);
+    CHECK(sheet_error(1,0)==SHEET_ERR_CYCLE);
+    CHECK(sheet_error(1,1)==SHEET_ERR_CYCLE);
+    CHECK(sheet_set(1,1,"4")==0);
+    sheet_recalc();
+    CHECK(sheet_error(1,0)==0);
+    CHECK(sheet_value(1,0)==400);
+    CHECK(sheet_set(2,2,"=$A$1+A$2+$A1")==0);
+    CHECK(sheet_copy(2,2,3,3)==0);
+    CHECK(!strcmp(sheet_get(3,3),"=$A$1+B$2+$A2"));
+    CHECK(sheet_set(2,2,"=SUM(A1:A2)")==0);
+    CHECK(sheet_copy(2,2,3,3)==0);
+    CHECK(!strcmp(sheet_get(3,3),"=SUM(B2:B3)"));
+    strcpy(clipboard,sheet_get(2,2));
+    CHECK(sheet_set(2,2,"99")==0);
+    CHECK(sheet_paste(clipboard,2,2,3,3)==0);
+    CHECK(!strcmp(sheet_get(3,3),"=SUM(B2:B3)"));
+    CHECK(sheet_paste("=$A$1+A$2+$A1",2,2,3,3)==0);
+    CHECK(!strcmp(sheet_get(3,3),"=$A$1+B$2+$A2"));
+    CHECK(sheet_copy(3,3,3,3)==0);
+    CHECK(!strcmp(sheet_get(3,3),"=$A$1+B$2+$A2"));
+    CHECK(sheet_set(2,2,"hello")==0);
+    CHECK(sheet_copy(2,2,2,2)==0);
+    CHECK(!strcmp(sheet_get(2,2),"hello"));
+    strcpy(clipboard,sheet_get(2,2));
+    CHECK(sheet_set(2,2,"goodbye")==0);
+    CHECK(sheet_paste(clipboard,2,2,3,3)==0);
+    CHECK(!strcmp(sheet_get(3,3),"hello"));
+    CHECK(sheet_paste("=A1",1,1,0,0)==SHEET_ERR_REF);
+    CHECK(!strcmp(sheet_get(0,0),"12.5"));
+    CHECK(sheet_paste("x",26,0,0,0)==SHEET_ERR_REF);
+    CHECK(sheet_paste("x",0,0,26,0)==SHEET_ERR_REF);
+    CHECK(sheet_copy(26,0,0,0)==SHEET_ERR_REF);
+    CHECK(sheet_set(0,0,"")==0);
+    CHECK(sheet_kind(0,0)==SHEET_EMPTY);
+    CHECK(sheet_value(0,0)==0);
+    CHECK(!strcmp(sheet_get(0,0),""));
+    CHECK(sheet_set(26,0,"a")==SHEET_ERR_REF);
+    CHECK(sheet_set(0,100,"a")==SHEET_ERR_REF);
+    CHECK(sheet_set(0,0,"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl")==SHEET_ERR_LONG);
+    sheet_format(-123456789L,out);CHECK(!strcmp(out,"-1234567.89"));
+    sheet_format(100,out);CHECK(!strcmp(out,"1"));
+    sheet_format(10,out);CHECK(!strcmp(out,"0.1"));
+    sheet_format(1,out);CHECK(!strcmp(out,"0.01"));
+    sheet_format(2147483647L,out);CHECK(!strcmp(out,"21474836.47"));
+    sheet_reset();
+    for(i=0;i<SHEET_MAX_CELLS;++i) CHECK(sheet_set(i%26,i/26,"1")==0);
+    CHECK(sheet_count()==SHEET_MAX_CELLS);
+    CHECK(sheet_set(25,99,"1")==SHEET_ERR_FULL);
+    CHECK(sheet_set(0,0,"2")==0);
+    CHECK(sheet_value(0,0)==200);
+    CHECK(sheet_set(0,0,"")==0);
+    CHECK(sheet_set(25,99,"3")==0);
+    for(i=0;i<sheet_count();++i) { raw=sheet_at(i,&c,&r);CHECK(raw!=NULL);CHECK(!strcmp(raw,sheet_get(c,r))); }
+    CHECK(sheet_at(SHEET_MAX_CELLS,&c,&r)==NULL);
+    printf("%u checks passed\n",tests);
+    return 0;
+}

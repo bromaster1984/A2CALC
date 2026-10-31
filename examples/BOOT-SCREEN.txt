@@ -1,0 +1,24 @@
+ A2CALC | New | Open | Save | XLSX | Goto | Find | Help                         
+A1  0/128 cells                                                                 
+    A           B           C           D           E           F               
+  1            |           |           |           |           |           |    
+  2            |           |           |           |           |           |    
+  3            |           |           |           |           |           |    
+  4            |           |           |           |           |           |    
+  5            |           |           |           |           |           |    
+  6            |           |           |           |           |           |    
+  7            |           |           |           |           |           |    
+  8            |           |           |           |           |           |    
+  9            |           |           |           |           |           |    
+ 10            |           |           |           |           |           |    
+ 11            |           |           |           |           |           |    
+ 12            |           |           |           |           |           |    
+ 13            |           |           |           |           |           |    
+ 14            |           |           |           |           |           |    
+ 15            |           |           |           |           |           |    
+ 16            |           |           |           |           |           |    
+ 17            |           |           |           |           |           |    
+ 18            |           |           |           |           |           |    
+                                                                                
+Ctrl-L: help. Ctrl-D: demo. Save files on drive 2 volume DATA.                  
+Arrows:move Enter:edit  ^S:save ^O:open ^X:xlsx ^C:copy ^V:paste ^L:help        
